@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftData
+import Charts
 
 @main
 struct BreatheWellApp: App {
@@ -10,8 +12,11 @@ struct BreatheWellApp: App {
 
                 ProgressView()
                     .tabItem { Label("Progress", systemImage: "chart.bar") }
+
+                EntryListView()
+                    .tabItem { Label("Past Logs", systemImage: "list.bullet") }
             }
+            .modelContainer(for: [SymptomEntry.self])
         }
-        .modelContainer(for: SymptomEntry.self) // enables SwiftData
     }
 }

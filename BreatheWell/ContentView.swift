@@ -1,11 +1,13 @@
+import SwiftUI
 import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var context
+    
     @State private var breathlessness = 0
     @State private var cough = ""
     @State private var energyLevel = 5
-
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -27,6 +29,11 @@ struct ContentView: View {
                     )
                     context.insert(entry)
                     try? context.save()
+                    
+                    // Clear form after saving
+                    breathlessness = 0
+                    cough = ""
+                    energyLevel = 5
                 }
             }
             .navigationTitle("Log Symptoms")
