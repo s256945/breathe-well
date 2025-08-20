@@ -3,15 +3,36 @@ import SwiftData
 
 struct MedicationView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \MedicationDay.date, order: .reverse) private var days: [MedicationDay]
+
+    // All medication days (newest first)
+    @Query(sort: \MedicationDay.date, order: .reverse)
+    private var days: [MedicationDay]
+
+    // Single user profile (if any)
+    @Query private var profiles: [UserProfile]
+
     @State private var createdToday = false
 
+    private var profile: UserProfile? { profiles.first }
+
+    // A key that changes when profile defaults change (to use in .onChange)
+    private var profileDefaultsKey: String {
+        let t = profile?.dailyTablets ?? -1
+        let p = profile?.dailyPuffs ?? -1
+        return "\(t)-\(p)"
+    }
+
+    // Find or create today's record
     private var today: MedicationDay {
         if let existing = days.first(where: { Calendar.current.isDate($0.date, inSameDayAs: Date()) }) {
             return existing
         }
         if !createdToday {
             let m = MedicationDay()
+            if let p = profile {
+                m.tabletsPrescribed = p.dailyTablets
+                m.puffsPrescribed   = p.dailyPuffs
+            }
             context.insert(m)
             try? context.save()
             createdToday = true
@@ -20,6 +41,21 @@ struct MedicationView: View {
         return MedicationDay()
     }
 
+    // Apply current profile defaults to today (used onAppear and when profile changes)
+    private func applyProfileDefaultsToToday() {
+        guard let p = profile else { return }
+        // Only change today's targets if they differ from profile
+        if today.tabletsPrescribed != p.dailyTablets || today.puffsPrescribed != p.dailyPuffs {
+            today.tabletsPrescribed = p.dailyTablets
+            today.puffsPrescribed   = p.dailyPuffs
+            // keep taken counts within new bounds
+            today.tabletsTaken = min(today.tabletsTaken, today.tabletsPrescribed)
+            today.puffsTaken   = min(today.puffsTaken, today.puffsPrescribed)
+            try? context.save()
+        }
+    }
+
+    // Nice date for header
     private var prettyDate: String {
         let df = DateFormatter()
         df.dateFormat = "EEEE, d MMMM yyyy"
@@ -28,7 +64,6 @@ struct MedicationView: View {
 
     var body: some View {
         ZStack {
-            // Paint the whole screen first (kills the white/grey strip)
             Color(.systemGroupedBackground).ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -47,7 +82,7 @@ struct MedicationView: View {
                         }
                         .padding(.top, 12)
 
-                        // Big circular % ring
+                        // Ring (behind text)
                         RingProgressView(progress: today.adherence) {
                             VStack(spacing: 6) {
                                 Text("\(Int(round(today.adherence * 100)))%")
@@ -93,7 +128,7 @@ struct MedicationView: View {
                                 CapsuleRow(
                                     total: today.puffsPrescribed,
                                     filled: today.puffsTaken,
-                                    filledIcon: "lungs.fill",   // use "wind" if lungs.* not available
+                                    filledIcon: "lungs.fill",
                                     emptyIcon: "lungs"
                                 ) { idx in
                                     if idx < today.puffsTaken {
@@ -111,14 +146,13 @@ struct MedicationView: View {
                     }
                 }
                 .scrollIndicators(.hidden)
-                // (No background on ScrollView — the ZStack paints the whole screen)
-                
+
                 // Bottom instructions
                 VStack(spacing: 6) {
                     Image(systemName: "hand.tap.fill")
                         .foregroundColor(.secondary)
                         .imageScale(.large)
-                    Text("Tap icons to mark doses as taken")
+                    Text("Tap icons to mark tablets or inhaler puffs taken.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -128,12 +162,21 @@ struct MedicationView: View {
             }
         }
         .navigationBarHidden(true)
+        // Seed/update when the view appears
+        .onAppear {
+            _ = today   // ensure it's created if needed
+            applyProfileDefaultsToToday()
+        }
+        // Auto-apply if profile defaults change later
+        .onChange(of: profileDefaultsKey) { _, _ in
+            applyProfileDefaultsToToday()
+        }
     }
 }
 
-// MARK: - Ring
+// MARK: - Ring view (styled like your mockup)
 private struct RingProgressView<Content: View>: View {
-    var progress: Double
+    var progress: Double // 0...1
     var content: () -> Content
     init(progress: Double, @ViewBuilder content: @escaping () -> Content) {
         self.progress = max(0, min(progress, 1))
