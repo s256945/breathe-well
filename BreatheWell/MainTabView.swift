@@ -15,8 +15,8 @@ struct MainTabView: View {
             MedicationView()       // medication page (big % circle)
                 .tabItem { Label("Medication", systemImage: "pills") }
 
-            ProfileView()
-                .tabItem { Label("Profile", systemImage: "person.circle") }
+//            ProfileView()
+//                .tabItem { Label("Profile", systemImage: "person.circle") }
         }
     }
 }
