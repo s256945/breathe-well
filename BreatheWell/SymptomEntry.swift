@@ -24,10 +24,10 @@ final class SymptomEntry: Identifiable {
         date: Date = Date(),
         breathlessness: Int = 0,
         cough: String = "",
-        energyLevel: Int = 5,
-        mood: Int = 3,
+        energyLevel: Int = 1,
+        mood: Int = 1,
         loneliness: Int = 1,
-        sleepQuality: Int = 3,
+        sleepQuality: Int = 1,
         hadCommunityInteraction: Bool = false,
         wentOutside: Bool = false,
         gratitudeNote: String? = nil

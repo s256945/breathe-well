@@ -3,229 +3,292 @@ import SwiftData
 
 struct MedicationView: View {
     @Environment(\.modelContext) private var context
+    @EnvironmentObject var auth: AuthViewModel
 
-    // All medication days (newest first)
+    // Medication days (newest first)
     @Query(sort: \MedicationDay.date, order: .reverse)
     private var days: [MedicationDay]
 
-    // Single user profile (if any)
+    // Profiles (may be empty briefly on first load)
     @Query private var profiles: [UserProfile]
 
-    @State private var createdToday = false
+    @State private var today: MedicationDay?
+    @State private var cachedProfile: UserProfile?
 
-    private var profile: UserProfile? { profiles.first }
-
-    // A key that changes when profile defaults change (to use in .onChange)
-    private var profileDefaultsKey: String {
-        let t = profile?.dailyTablets ?? -1
-        let p = profile?.dailyPuffs ?? -1
-        return "\(t)-\(p)"
+    private var currentProfile: UserProfile? {
+        if let p = cachedProfile { return p }
+        if let uid = auth.user?.uid,
+           let byUID = profiles.first(where: { $0.authUID == uid }) {
+            return byUID
+        }
+        return profiles.first
     }
 
-    // Find or create today's record
-    private var today: MedicationDay {
-        if let existing = days.first(where: { Calendar.current.isDate($0.date, inSameDayAs: Date()) }) {
-            return existing
+    private var profileSyncToken: String {
+        if let p = currentProfile {
+            return "\(p.authUID)#\(p.dailyTablets)#\(p.dailyPuffs)#\(profiles.count)"
         }
-        if !createdToday {
-            let m = MedicationDay()
-            if let p = profile {
-                m.tabletsPrescribed = p.dailyTablets
-                m.puffsPrescribed   = p.dailyPuffs
-            }
-            context.insert(m)
-            try? context.save()
-            createdToday = true
-            return m
-        }
-        return MedicationDay()
-    }
-
-    // Apply current profile defaults to today (used onAppear and when profile changes)
-    private func applyProfileDefaultsToToday() {
-        guard let p = profile else { return }
-        // Only change today's targets if they differ from profile
-        if today.tabletsPrescribed != p.dailyTablets || today.puffsPrescribed != p.dailyPuffs {
-            today.tabletsPrescribed = p.dailyTablets
-            today.puffsPrescribed   = p.dailyPuffs
-            // keep taken counts within new bounds
-            today.tabletsTaken = min(today.tabletsTaken, today.tabletsPrescribed)
-            today.puffsTaken   = min(today.puffsTaken, today.puffsPrescribed)
-            try? context.save()
-        }
-    }
-
-    // Nice date for header
-    private var prettyDate: String {
-        let df = DateFormatter()
-        df.dateFormat = "EEEE, d MMMM yyyy"
-        return df.string(from: today.date)
+        return "none#\(profiles.count)"
     }
 
     var body: some View {
         ZStack {
+            // ✅ Full-screen background (no more narrow strip)
             Color(.systemGroupedBackground).ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 22) {
+            ScrollView {
+                VStack(spacing: 18) {
+                    // Header
+                    VStack(spacing: 6) {
+                        Text("BreatheWell")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.blue)
 
-                        // Header
-                        VStack(spacing: 8) {
-                            Text("BreatheWell")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.blue)
+                        Text((today?.date ?? Date()).formatted(date: .complete, time: .omitted))
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 12)
 
-                            Text(prettyDate)
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.top, 12)
-
-                        // Ring (behind text)
-                        RingProgressView(progress: today.adherence) {
-                            VStack(spacing: 6) {
-                                Text("\(Int(round(today.adherence * 100)))%")
-                                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                                Text("of \(today.tabletsPrescribed) tablets &\n\(today.puffsPrescribed) inhaler puffs")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.center)
-                            }
-                        }
-                        .frame(width: 260, height: 260)
-                        .padding(.top, 4)
+                    if let t = today {
+                        // Mockup-style ring that encloses the % label
+                        AutoSizingProgressRing(
+                            percent: t.adherence,
+                            tablets: t.tabletsPrescribed,
+                            puffs: t.puffsPrescribed
+                        )
+                        .padding(.top, 2)
 
                         // Tablets row
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("\(today.tabletsTaken)/\(today.tabletsPrescribed)")
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(t.tabletsTaken)/\(t.tabletsPrescribed)")
                                 .font(.headline)
 
-                            CapsuleContainer {
-                                CapsuleRow(
-                                    total: today.tabletsPrescribed,
-                                    filled: today.tabletsTaken,
-                                    filledIcon: "pills",
-                                    emptyIcon: "pills"
-                                ) { idx in
-                                    if idx < today.tabletsTaken {
-                                        today.tabletsTaken = max(0, idx)
-                                    } else {
-                                        today.tabletsTaken = min(today.tabletsPrescribed, idx + 1)
-                                    }
-                                    try? context.save()
+                            CapsuleRow(
+                                total: t.tabletsPrescribed,
+                                filled: t.tabletsTaken,
+                                iconName: "pills"
+                            ) { idx in
+                                if idx < t.tabletsTaken {
+                                    t.tabletsTaken = max(0, idx)
+                                } else {
+                                    t.tabletsTaken = min(t.tabletsPrescribed, idx + 1)
                                 }
+                                try? context.save()
                             }
                         }
-                        .padding(.horizontal)
 
                         // Inhaler row
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("\(today.puffsTaken)/\(today.puffsPrescribed)")
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(t.puffsTaken)/\(t.puffsPrescribed)")
                                 .font(.headline)
 
-                            CapsuleContainer {
-                                CapsuleRow(
-                                    total: today.puffsPrescribed,
-                                    filled: today.puffsTaken,
-                                    filledIcon: "lungs.fill",
-                                    emptyIcon: "lungs"
-                                ) { idx in
-                                    if idx < today.puffsTaken {
-                                        today.puffsTaken = max(0, idx)
-                                    } else {
-                                        today.puffsTaken = min(today.puffsPrescribed, idx + 1)
-                                    }
-                                    try? context.save()
+                            CapsuleRow(
+                                total: t.puffsPrescribed,
+                                filled: t.puffsTaken,
+                                iconName: "lungs.fill" // use "wind" if needed on older targets
+                            ) { idx in
+                                if idx < t.puffsTaken {
+                                    t.puffsTaken = max(0, idx)
+                                } else {
+                                    t.puffsTaken = min(t.puffsPrescribed, idx + 1)
                                 }
+                                try? context.save()
                             }
                         }
-                        .padding(.horizontal)
 
-                        Spacer(minLength: 48)
+                        Text("Tap an icon to mark tablets or inhaler puffs taken.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 10)
+                            .padding(.bottom, 24)
+                    } else {
+                        ProgressView("Loading…")
+                            .padding(.vertical, 80)
                     }
                 }
-                .scrollIndicators(.hidden)
-
-                // Bottom instructions
-                VStack(spacing: 6) {
-                    Image(systemName: "hand.tap.fill")
-                        .foregroundColor(.secondary)
-                        .imageScale(.large)
-                    Text("Tap icons to mark tablets or inhaler puffs taken.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-                .padding(.vertical, 16)
+                // Keep the centered column feel, but background is now on ZStack
+                .frame(maxWidth: 520)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity)
             }
+            .background(.clear) // important so the ScrollView doesn't repaint a strip
         }
         .navigationBarHidden(true)
-        // Seed/update when the view appears
+
+        // Bootstrap & resync
+        .task {
+            await ensureProfileExists()
+            await ensureTodayMatchesProfile()
+        }
         .onAppear {
-            _ = today   // ensure it's created if needed
-            applyProfileDefaultsToToday()
+            Task {
+                await ensureProfileExists()
+                await ensureTodayMatchesProfile()
+            }
         }
-        // Auto-apply if profile defaults change later
-        .onChange(of: profileDefaultsKey) { _, _ in
-            applyProfileDefaultsToToday()
+        .onChange(of: auth.user?.uid) { _, _ in
+            Task {
+                cachedProfile = nil
+                await ensureProfileExists()
+                await ensureTodayMatchesProfile()
+            }
         }
+        .onChange(of: profileSyncToken) { _, _ in
+            Task { await ensureTodayMatchesProfile() }
+        }
+    }
+
+    // MARK: Profile bootstrap
+    @MainActor
+    private func ensureProfileExists() async {
+        if cachedProfile != nil { return }
+        guard let uid = auth.user?.uid else { return }
+
+        if let found = profiles.first(where: { $0.authUID == uid }) {
+            cachedProfile = found
+            return
+        }
+        if let found = try? context.fetch(FetchDescriptor<UserProfile>())
+            .first(where: { $0.authUID == uid }) {
+            cachedProfile = found
+            return
+        }
+        let p = UserProfile(
+            authUID: uid,
+            displayName: auth.user?.displayName ?? "",
+            email: auth.user?.email,
+            yearOfBirth: nil,
+            diagnosisNotes: nil,
+            avatarSystemName: "person.circle.fill",
+            dailyTablets: 0,
+            dailyPuffs: 0,
+            notificationsEnabled: true,
+            reminderHour: 18,
+            reminderMinute: 0
+        )
+        context.insert(p)
+        try? context.save()
+        cachedProfile = p
+        print("✅ Created UserProfile for MedicationView uid:", uid)
+    }
+
+    // MARK: Ensure “today” exists & matches profile defaults
+    @MainActor
+    private func ensureTodayMatchesProfile() async {
+        let prof = currentProfile
+
+        if let t = today, Calendar.current.isDateInToday(t.date) {
+            applyProfileDefaults(to: t, profile: prof)
+            return
+        }
+        if let existing = days.first(where: { Calendar.current.isDateInToday($0.date) }) {
+            today = existing
+            applyProfileDefaults(to: existing, profile: prof)
+            return
+        }
+        // Create new
+        let tabs = prof?.dailyTablets ?? 5
+        let puffs = prof?.dailyPuffs ?? 3
+        let m = MedicationDay(
+            date: Date(),
+            tabletsPrescribed: tabs,
+            tabletsTaken: 0,
+            puffsPrescribed: puffs,
+            puffsTaken: 0
+        )
+        context.insert(m)
+        try? context.save()
+        today = m
+    }
+
+    private func applyProfileDefaults(to m: MedicationDay, profile: UserProfile?) {
+        guard let prof = profile else { return }
+        var changed = false
+        if m.tabletsPrescribed != prof.dailyTablets {
+            m.tabletsPrescribed = prof.dailyTablets
+            m.tabletsTaken = min(m.tabletsTaken, m.tabletsPrescribed)
+            changed = true
+        }
+        if m.puffsPrescribed != prof.dailyPuffs {
+            m.puffsPrescribed = prof.dailyPuffs
+            m.puffsTaken = min(m.puffsTaken, m.puffsPrescribed)
+            changed = true
+        }
+        if changed { try? context.save() }
     }
 }
 
-// MARK: - Ring view (styled like your mockup)
-private struct RingProgressView<Content: View>: View {
-    var progress: Double // 0...1
-    var content: () -> Content
-    init(progress: Double, @ViewBuilder content: @escaping () -> Content) {
-        self.progress = max(0, min(progress, 1))
-        self.content = content
-    }
+// MARK: - Auto-sizing mockup ring (thin track, big %)
+private struct AutoSizingProgressRing: View {
+    let percent: Double   // 0.0 ... 1.0
+    let tablets: Int
+    let puffs: Int
+
     var body: some View {
-        ZStack {
-            Circle().stroke(Color.secondary.opacity(0.15), lineWidth: 16)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(Color.blue, style: StrokeStyle(lineWidth: 16, lineCap: .round, lineJoin: .round))
-                .rotationEffect(.degrees(-90))
-            content()
+        GeometryReader { geo in
+            let maxW = geo.size.width
+            let ringSize = min(maxW, 320)      // large but capped
+            let ringWidth = ringSize * 0.055    // ~ thin ring (≈ 14–18 px)
+            let percentFont = ringSize * 0.24   // big % like mockup
+
+            ZStack {
+                Circle()
+                    .stroke(Color.blue.opacity(0.12), lineWidth: ringWidth)
+
+                Circle()
+                    .trim(from: 0, to: CGFloat(max(0, min(1, percent))))
+                    .stroke(style: StrokeStyle(lineWidth: ringWidth, lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(.blue)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.35), value: percent)
+
+                VStack(spacing: 8) {
+                    Text("\(Int(round(percent * 100)))%")
+                        .font(.system(size: percentFont, weight: .bold, design: .rounded))
+
+                    Text("of \(tablets) tablets &\n\(puffs) inhaler puffs")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                }
+            }
+            .frame(width: ringSize, height: ringSize)
+            .frame(maxWidth: .infinity) // centered within GeometryReader
         }
+        .frame(height: 300) // enough vertical room for large devices
     }
 }
 
-// MARK: - Capsule styles
-private struct CapsuleContainer<Content: View>: View {
-    @ViewBuilder var content: Content
-    var body: some View {
-        HStack { content }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 18)
-            .background(.regularMaterial)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(Color.secondary.opacity(0.25), lineWidth: 1))
-    }
-}
-
+// MARK: - Capsule row (soft look like mock)
 private struct CapsuleRow: View {
     let total: Int
     let filled: Int
-    let filledIcon: String
-    let emptyIcon: String
+    let iconName: String
     var onTapIndex: (Int) -> Void
+
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             ForEach(0..<max(total, 0), id: \.self) { i in
                 Button {
                     onTapIndex(i)
                 } label: {
-                    Image(systemName: i < filled ? filledIcon : emptyIcon)
-                        .font(.system(size: 24, weight: .regular))
-                        .foregroundColor(i < filled ? .blue : .gray.opacity(0.35))
-                        .frame(width: 32, height: 32)
+                    Image(systemName: iconName)
+                        .imageScale(.large)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(i < filled ? Color.accentColor : Color.secondary.opacity(0.35))
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 18)
+        .background(Color(.systemGray6))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule().stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+        )
     }
 }

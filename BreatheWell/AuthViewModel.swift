@@ -76,7 +76,6 @@ final class AuthViewModel: ObservableObject {
             return
         }
 
-        // 3) Create brand-new profile for this user
         let p = UserProfile(
             authUID: user.uid,
             displayName: user.displayName ?? "",
@@ -84,8 +83,8 @@ final class AuthViewModel: ObservableObject {
             yearOfBirth: nil,
             diagnosisNotes: nil,
             avatarSystemName: "person.circle.fill",
-            dailyTablets: 2,
-            dailyPuffs: 2,
+            dailyTablets: 0,
+            dailyPuffs: 0,
             notificationsEnabled: true,
             reminderHour: 18,
             reminderMinute: 0

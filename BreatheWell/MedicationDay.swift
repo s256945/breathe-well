@@ -10,10 +10,10 @@ class MedicationDay {
     var puffsTaken: Int
 
     init(date: Date = .init(),
-         tabletsPrescribed: Int = 5,
-         tabletsTaken: Int = 4,
-         puffsPrescribed: Int = 3,
-         puffsTaken: Int = 3) {
+         tabletsPrescribed: Int = 0,
+         tabletsTaken: Int = 0,
+         puffsPrescribed: Int = 0,
+         puffsTaken: Int = 0) {
         self.date = date
         self.tabletsPrescribed = tabletsPrescribed
         self.tabletsTaken = tabletsTaken

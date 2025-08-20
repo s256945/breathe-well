@@ -71,8 +71,8 @@ private struct ProfileContent: View {
                 yearOfBirth: nil,
                 diagnosisNotes: nil,
                 avatarSystemName: "person.circle.fill",
-                dailyTablets: 2,
-                dailyPuffs: 2,
+                dailyTablets: 0,
+                dailyPuffs: 0,
                 notificationsEnabled: true,
                 reminderHour: 18,
                 reminderMinute: 0
@@ -80,10 +80,8 @@ private struct ProfileContent: View {
             context.insert(p)
             try context.save()
             localProfile = p
-            print("✅ Created UserProfile for uid:", uid)
         } catch {
             lastError = error.localizedDescription
-            print("🔥 Profile create failed:", error)
         }
     }
 }
@@ -146,12 +144,23 @@ private struct ProfileForm: View {
                 }
             }
 
-            // MARK: Medication defaults
-            Section("Medication Defaults") {
-                Stepper("Daily tablets: \(profile.dailyTablets)", value: $profile.dailyTablets, in: 0...20)
-                Stepper("Daily inhaler puffs: \(profile.dailyPuffs)", value: $profile.dailyPuffs, in: 0...20)
+            // MARK: Medication targets
+            Section("Medication Targets") {
+                Stepper("Daily tablets: \(profile.dailyTablets)",
+                        value: $profile.dailyTablets, in: 0...20)
+                    .onChange(of: profile.dailyTablets) { _, _ in
+                        try? context.save()
+                    }
+
+                Stepper("Daily inhaler puffs: \(profile.dailyPuffs)",
+                        value: $profile.dailyPuffs, in: 0...20)
+                    .onChange(of: profile.dailyPuffs) { _, _ in
+                        try? context.save()
+                    }
+
                 Text("These values populate the medication tracker by default each day.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             // MARK: Daily Reminder

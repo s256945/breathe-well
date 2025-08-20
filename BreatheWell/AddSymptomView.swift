@@ -11,9 +11,9 @@ struct AddSymptomView: View {
     @State private var energyLevel: Int = 5
 
     // Wellbeing & social
-    @State private var mood: Int = 3                 // 1–5
-    @State private var loneliness: Int = 1           // 0=Never,1=Sometimes,2=Often
-    @State private var sleepQuality: Int = 3         // 1–5
+    @State private var mood: Int = 1                 // 1–5
+    @State private var loneliness: Int = 0           // 0=Never,1=Sometimes,2=Often
+    @State private var sleepQuality: Int = 1         // 1–5
     @State private var hadCommunityInteraction = false
     @State private var wentOutside = false
     @State private var gratitudeNote: String = ""
