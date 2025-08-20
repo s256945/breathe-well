@@ -95,7 +95,7 @@ private struct ProfileForm: View {
                 }
 
                 // MARK: Medication defaults
-                Section(header: Text("Medication Defaults")) {
+                Section(header: Text("Medication Requirements")) {
                     Stepper("Daily tablets: \(profile.dailyTablets)",
                             value: $profile.dailyTablets,
                             in: 0...20)
