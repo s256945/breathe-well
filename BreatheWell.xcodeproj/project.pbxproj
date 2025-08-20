@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		6AAFE2942E55EC0E003302D6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 6AAFE2922E55EC01003302D6 /* README.md */; };
+		6AAFE29C2E55FF8F003302D6 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6AAFE29B2E55FF8F003302D6 /* GoogleService-Info.plist */; };
+		6AAFE29F2E56015B003302D6 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 6AAFE29E2E56015B003302D6 /* FirebaseAuth */; };
+		6AAFE2A12E56015B003302D6 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6AAFE2A02E56015B003302D6 /* FirebaseCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +35,7 @@
 		6AAFE2482E55092A003302D6 /* BreatheWellTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BreatheWellTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6AAFE2522E55092A003302D6 /* BreatheWellUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BreatheWellUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6AAFE2922E55EC01003302D6 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		6AAFE29B2E55FF8F003302D6 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -57,6 +61,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6AAFE2A12E56015B003302D6 /* FirebaseCore in Frameworks */,
+				6AAFE29F2E56015B003302D6 /* FirebaseAuth in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,6 +91,7 @@
 				6AAFE2552E55092A003302D6 /* BreatheWellUITests */,
 				6AAFE23C2E550928003302D6 /* Products */,
 				6AAFE2922E55EC01003302D6 /* README.md */,
+				6AAFE29B2E55FF8F003302D6 /* GoogleService-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -118,6 +125,8 @@
 			);
 			name = BreatheWell;
 			packageProductDependencies = (
+				6AAFE29E2E56015B003302D6 /* FirebaseAuth */,
+				6AAFE2A02E56015B003302D6 /* FirebaseCore */,
 			);
 			productName = BreatheWell;
 			productReference = 6AAFE23B2E550928003302D6 /* BreatheWell.app */;
@@ -201,6 +210,9 @@
 			);
 			mainGroup = 6AAFE2322E550928003302D6;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6AAFE29D2E56015B003302D6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6AAFE23C2E550928003302D6 /* Products */;
 			projectDirPath = "";
@@ -219,6 +231,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6AAFE2942E55EC0E003302D6 /* README.md in Resources */,
+				6AAFE29C2E55FF8F003302D6 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -557,6 +570,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6AAFE29D2E56015B003302D6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6AAFE29E2E56015B003302D6 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6AAFE29D2E56015B003302D6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		6AAFE2A02E56015B003302D6 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6AAFE29D2E56015B003302D6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6AAFE2332E550928003302D6 /* Project object */;
 }

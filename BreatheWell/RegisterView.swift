@@ -1,107 +1,136 @@
 import SwiftUI
-import SwiftData
 
 struct RegisterView: View {
+    @EnvironmentObject var auth: AuthViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
-    @AppStorage("signedIn") private var signedIn = false
-    @AppStorage("profileID") private var profileIDString = ""   // ← remember which profile
-    @Query private var profiles: [UserProfile]
 
-    @State private var displayName = ""
     @State private var email = ""
-    @State private var yearOfBirth = Calendar.current.component(.year, from: Date()) - 18
-    @State private var avatarSystemName = "person.circle.fill"
-    @State private var agree = false
+    @State private var password = ""
+    @State private var confirm = ""
+    @State private var showPassword = false
+    @State private var showConfirm = false
+    @State private var isWorking = false
 
-    private var currentYear: Int { Calendar.current.component(.year, from: Date()) }
-    private var years: [Int] { Array((currentYear - 120)...(currentYear - 18)).reversed() }
-
-    private var canContinue: Bool {
-        !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && agree
+    // MARK: Validation
+    private var emailIsValid: Bool {
+        let pattern = #"^\S+@\S+\.\S+$"#
+        return email.range(of: pattern, options: .regularExpression) != nil
+    }
+    private var passwordIsValid: Bool { password.count >= 6 }
+    private var passwordsMatch: Bool { !password.isEmpty && password == confirm }
+    private var canSubmit: Bool {
+        emailIsValid && passwordIsValid && passwordsMatch && !isWorking
     }
 
     var body: some View {
         Form {
-            Section("Create account") {
-                TextField("Display name", text: $displayName)
-                TextField("Email (optional)", text: $email)
+            // Create account fields
+            Section {
+                TextField("Email", text: $email)
                     .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .keyboardType(.emailAddress)
+                    .textContentType(.emailAddress)
 
-                Picker("Year of birth", selection: $yearOfBirth) {
-                    ForEach(years, id: \.self) { y in Text(String(y)).tag(y) }
-                }.pickerStyle(.navigationLink)
-
-                Picker("Avatar", selection: $avatarSystemName) {
-                    Label("Person", systemImage: "person.circle.fill").tag("person.circle.fill")
-                    Label("Heart", systemImage: "heart.fill").tag("heart.fill")
-                    Label("Leaf", systemImage: "leaf.fill").tag("leaf.fill")
-                    Label("Star", systemImage: "star.fill").tag("star.fill")
-                    Label("Bolt", systemImage: "bolt.fill").tag("bolt.fill")
-                    Label("Sun", systemImage: "sun.max.fill").tag("sun.max.fill")
-                }.pickerStyle(.menu)
+                // Password with show/hide (no overlay — more stable)
+                HStack {
+                    if showPassword {
+                        TextField("Password (min 6)", text: $password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textContentType(.newPassword)
+                    } else {
+                        SecureField("Password (min 6)", text: $password)
+                            .textContentType(.newPassword)
+                    }
+                    Button { showPassword.toggle() } label: {
+                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 HStack {
-                    Spacer()
-                    Image(systemName: avatarSystemName)
-                        .resizable().scaledToFit().frame(width: 56, height: 56)
-                        .foregroundStyle(.blue)
-                    Spacer()
+                    if showConfirm {
+                        TextField("Confirm password", text: $confirm)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textContentType(.newPassword)
+                    } else {
+                        SecureField("Confirm password", text: $confirm)
+                            .textContentType(.newPassword)
+                    }
+                    Button { showConfirm.toggle() } label: {
+                        Image(systemName: showConfirm ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Inline validation
+                VStack(alignment: .leading, spacing: 6) {
+                    if !email.isEmpty && !emailIsValid {
+                        Label("Please enter a valid email address.", systemImage: "exclamationmark.circle")
+                            .font(.footnote).foregroundStyle(.red)
+                    }
+                    if !password.isEmpty && !passwordIsValid {
+                        Label("Password must be at least 6 characters.", systemImage: "exclamationmark.circle")
+                            .font(.footnote).foregroundStyle(.red)
+                    }
+                    if !confirm.isEmpty && !passwordsMatch {
+                        Label("Passwords don’t match.", systemImage: "exclamationmark.circle")
+                            .font(.footnote).foregroundStyle(.red)
+                    }
+                }
+                .listRowInsets(.init(top: 0, leading: 16, bottom: 0, trailing: 16))
+            } header: {
+                Text("Create account")
+            }
+
+            // Error section (wrap in Group to keep the builder happy)
+            Group {
+                if let err = auth.authError, !err.isEmpty {
+                    Section {
+                        Text(err)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } header: {
+                        Text("Error")
+                    }
                 }
             }
 
-            Section("Consent") {
-                Toggle("I am 18+ and agree to the Terms & Privacy Policy", isOn: $agree)
-            }
-
+            // Submit
             Section {
-                Button("Create account") { createOrUpdateProfile() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!canContinue)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    Task { await createAccount() }
+                } label: {
+                    if isWorking {
+                        ProgressView().frame(maxWidth: .infinity)
+                    } else {
+                        Text("Create account").frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canSubmit)
             }
         }
         .navigationTitle("Create account")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // If returning user, prefill
-            if let p = profiles.first {
-                displayName = p.displayName
-                email = p.email ?? ""
-                yearOfBirth = p.yearOfBirth ?? (currentYear - 18)
-                avatarSystemName = p.avatarSystemName
-            }
+        .submitLabel(.go)
+        .onSubmit {
+            if canSubmit { Task { await createAccount() } }
         }
     }
 
-    private func createOrUpdateProfile() {
-        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        var profile: UserProfile
-        if let existing = profiles.first {
-            existing.displayName = trimmedName
-            existing.email = trimmedEmail.isEmpty ? nil : trimmedEmail
-            existing.yearOfBirth = yearOfBirth
-            existing.avatarSystemName = avatarSystemName
-            profile = existing
-        } else {
-            profile = UserProfile(
-                displayName: trimmedName,
-                email: trimmedEmail.isEmpty ? nil : trimmedEmail,
-                yearOfBirth: yearOfBirth,
-                avatarSystemName: avatarSystemName
-            )
-            context.insert(profile)
-        }
-
-        try? context.save()
-
-        // Persist which profile to use + signed-in state
-        profileIDString = profile.id.uuidString
-        signedIn = true
-
-        dismiss() // go into the app
+    // MARK: Actions
+    private func createAccount() async {
+        guard canSubmit else { return }
+        isWorking = true
+        defer { isWorking = false }
+        await auth.register(email: email.trimmingCharacters(in: .whitespaces),
+                            password: password)
+        if auth.user != nil { dismiss() }
     }
 }

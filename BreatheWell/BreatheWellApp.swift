@@ -1,17 +1,17 @@
+// BreatheWellApp.swift
 import SwiftUI
 import SwiftData
+import FirebaseCore
 
 @main
 struct BreatheWellApp: App {
-    @AppStorage("signedIn") private var signedIn = false
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var auth = AuthViewModel()
 
     var body: some Scene {
         WindowGroup {
-            if signedIn {
-                MainTabView()
-            } else {
-                AuthLandingView()
-            }
+            RootGateView()
+                .environmentObject(auth)   // ← important
         }
         .modelContainer(for: [
             SymptomEntry.self,

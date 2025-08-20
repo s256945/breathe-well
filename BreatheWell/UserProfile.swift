@@ -1,31 +1,21 @@
-import Foundation
 import SwiftData
 
 @Model
 final class UserProfile {
-    // Stable identity we can store in @AppStorage
-    var id: UUID
-
-    // Identity
+    @Attribute(.unique) var authUID: String      // ✅ now non-optional
     var displayName: String
     var email: String?
     var yearOfBirth: Int?
     var diagnosisNotes: String?
-
-    // Forum identity
     var avatarSystemName: String
-
-    // Medication defaults
     var dailyTablets: Int
     var dailyPuffs: Int
-
-    // Reminders
     var notificationsEnabled: Bool
     var reminderHour: Int
     var reminderMinute: Int
 
     init(
-        id: UUID = UUID(),
+        authUID: String,
         displayName: String = "",
         email: String? = nil,
         yearOfBirth: Int? = nil,
@@ -37,7 +27,7 @@ final class UserProfile {
         reminderHour: Int = 18,
         reminderMinute: Int = 0
     ) {
-        self.id = id
+        self.authUID = authUID
         self.displayName = displayName
         self.email = email
         self.yearOfBirth = yearOfBirth
@@ -48,16 +38,5 @@ final class UserProfile {
         self.notificationsEnabled = notificationsEnabled
         self.reminderHour = reminderHour
         self.reminderMinute = reminderMinute
-    }
-}
-
-extension UserProfile {
-    var reminderDateComponents: DateComponents {
-        DateComponents(hour: reminderHour, minute: reminderMinute)
-    }
-    var reminderTimeLabel: String {
-        let df = DateFormatter(); df.timeStyle = .short
-        let comps = reminderDateComponents
-        return Calendar.current.date(from: comps).map { df.string(from: $0) } ?? "—"
     }
 }

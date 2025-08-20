@@ -1,8 +1,9 @@
+// AuthLandingView.swift
 import SwiftUI
 
 struct AuthLandingView: View {
     @State private var showRegister = false
-    @State private var showSignIn = false
+    @State private var showLogin = false
 
     var body: some View {
         NavigationStack {
@@ -16,19 +17,15 @@ struct AuthLandingView: View {
                         Text("BreatheWell")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(.blue)
-
-                        // New slogan
                         Text("Support that meets you where you are")
                             .font(.headline)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.secondary)
-
-                        // Existing tagline/description
-                        Text("Track symptoms. Stay on top of medication. \nFeel supported by a kind community.")
+                        Text("Track symptoms. Stay on top of medication.\nFeel supported by a kind community.")
                             .font(.subheadline)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.secondary)
-                            .padding(.top, 4)
+                            .padding(.top, 2)
                     }
                     .padding(.horizontal)
 
@@ -49,15 +46,11 @@ struct AuthLandingView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
 
-                        // Placeholder: real Sign in with Apple/Firebase can be added later
                         Button {
-                            showSignIn = true
+                            showLogin = true
                         } label: {
-                            HStack {
-                                Image(systemName: "applelogo")
-                                Text("Sign in with Apple")
-                            }
-                            .frame(maxWidth: .infinity)
+                            Text("I already have an account")
+                                .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.large)
@@ -70,9 +63,8 @@ struct AuthLandingView: View {
                         .padding(.top, 4)
                 }
             }
-            .navigationDestination(isPresented: $showRegister) {
-                RegisterView()
-            }
+            .navigationDestination(isPresented: $showRegister) { RegisterView() }
+            .navigationDestination(isPresented: $showLogin) { LoginView() }
         }
     }
 }
