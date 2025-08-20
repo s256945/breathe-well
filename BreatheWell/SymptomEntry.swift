@@ -12,7 +12,7 @@ final class SymptomEntry: Identifiable {
     var cough: String
     var energyLevel: Int           // 1–10
 
-    // Wellbeing & social (NEW)
+    // Wellbeing & social
     var mood: Int                  // 1–5 (1=very low, 5=very good)
     var loneliness: Int            // 0=Never, 1=Sometimes, 2=Often
     var sleepQuality: Int          // 1–5
