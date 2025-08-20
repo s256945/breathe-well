@@ -9,8 +9,8 @@ struct MainTabView: View {
             ResourcesView()
                 .tabItem { Label("Resources", systemImage: "book") }
 
-            ForumView() //
-                .tabItem { Label("Community", systemImage: "person.2.circle") }
+            ForumListView()
+                .tabItem { Label("Community", systemImage: "person.3.fill") }
 
             MedicationView()       // medication page (big % circle)
                 .tabItem { Label("Medication", systemImage: "pills") }

@@ -11,14 +11,12 @@ struct BreatheWellApp: App {
     var body: some Scene {
         WindowGroup {
             RootGateView()
-                .environmentObject(auth)   // ← important
+                .environmentObject(auth)
         }
         .modelContainer(for: [
             SymptomEntry.self,
             MedicationDay.self,
-            UserProfile.self,
-            ForumPost.self,
-            ForumComment.self
+            UserProfile.self
         ])
     }
 }
