@@ -3,50 +3,46 @@ import SwiftData
 
 @Model
 final class UserProfile {
-    // MARK: Identity
+    // Stable identity we can store in @AppStorage
+    var id: UUID
+
+    // Identity
     var displayName: String
     var email: String?
     var yearOfBirth: Int?
     var diagnosisNotes: String?
 
-    // MARK: Forum identity (simple PFP using SF Symbols for now)
+    // Forum identity
     var avatarSystemName: String
 
-    // MARK: Clinician (optional)
-    var clinicianName: String?
-    var clinicName: String?
-
-    // MARK: Medication defaults (used by Medication page)
+    // Medication defaults
     var dailyTablets: Int
     var dailyPuffs: Int
 
-    // MARK: Reminders
+    // Reminders
     var notificationsEnabled: Bool
     var reminderHour: Int
     var reminderMinute: Int
 
-    // MARK: - Initializer required by @Model
     init(
-        displayName: String = "Your Name",
+        id: UUID = UUID(),
+        displayName: String = "",
         email: String? = nil,
         yearOfBirth: Int? = nil,
         diagnosisNotes: String? = nil,
         avatarSystemName: String = "person.circle.fill",
-        clinicianName: String? = nil,
-        clinicName: String? = nil,
         dailyTablets: Int = 2,
         dailyPuffs: Int = 2,
         notificationsEnabled: Bool = true,
         reminderHour: Int = 18,
         reminderMinute: Int = 0
     ) {
+        self.id = id
         self.displayName = displayName
         self.email = email
         self.yearOfBirth = yearOfBirth
         self.diagnosisNotes = diagnosisNotes
         self.avatarSystemName = avatarSystemName
-        self.clinicianName = clinicianName
-        self.clinicName = clinicName
         self.dailyTablets = dailyTablets
         self.dailyPuffs = dailyPuffs
         self.notificationsEnabled = notificationsEnabled
@@ -59,12 +55,9 @@ extension UserProfile {
     var reminderDateComponents: DateComponents {
         DateComponents(hour: reminderHour, minute: reminderMinute)
     }
-
     var reminderTimeLabel: String {
+        let df = DateFormatter(); df.timeStyle = .short
         let comps = reminderDateComponents
-        let cal = Calendar.current
-        let df = DateFormatter()
-        df.timeStyle = .short
-        return cal.date(from: comps).map { df.string(from: $0) } ?? "—"
+        return Calendar.current.date(from: comps).map { df.string(from: $0) } ?? "—"
     }
 }
