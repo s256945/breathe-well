@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6AAFE2942E55EC0E003302D6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 6AAFE2922E55EC01003302D6 /* README.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6AAFE2492E55092A003302D6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		6AAFE23B2E550928003302D6 /* BreatheWell.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BreatheWell.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6AAFE2482E55092A003302D6 /* BreatheWellTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BreatheWellTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6AAFE2522E55092A003302D6 /* BreatheWellUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BreatheWellUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6AAFE2922E55EC01003302D6 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -79,6 +84,7 @@
 				6AAFE24B2E55092A003302D6 /* BreatheWellTests */,
 				6AAFE2552E55092A003302D6 /* BreatheWellUITests */,
 				6AAFE23C2E550928003302D6 /* Products */,
+				6AAFE2922E55EC01003302D6 /* README.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6AAFE2942E55EC0E003302D6 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
