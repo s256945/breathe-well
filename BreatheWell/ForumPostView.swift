@@ -1,7 +1,12 @@
 import SwiftUI
+import SwiftData
+import FirebaseAuth
 
 struct ForumPostView: View {
     let post: ForumPost
+
+    @EnvironmentObject var auth: AuthViewModel
+    @Environment(\.modelContext) private var context
     @StateObject private var vm = ForumViewModel()
 
     @State private var replyText = ""
@@ -15,12 +20,15 @@ struct ForumPostView: View {
                         Text(post.title)
                             .font(.title3.weight(.semibold))
 
-                        HStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: post.authorAvatar)
+                                .resizable()
+                                .frame(width: 20, height: 20)
+                                .foregroundStyle(.secondary)
                             Text(post.authorName)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            // Absolute date & time
                             Text(post.createdAt, format: .dateTime.day().month().year().hour().minute())
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
@@ -83,9 +91,8 @@ struct ForumPostView: View {
 
                 Button {
                     Task {
-                        vm.newCommentBody = replyText
                         if let id = post.id {
-                            await vm.addComment(to: id)
+                            await vm.addComment(to: id, body: replyText)
                             replyText = ""
                         }
                     }
@@ -102,13 +109,18 @@ struct ForumPostView: View {
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            // Load SwiftData profile once here too (detail may be opened directly)
+            if let uid = auth.user?.uid {
+                let all: [UserProfile] = (try? context.fetch(FetchDescriptor<UserProfile>())) ?? []
+                vm.userProfile = all.first(where: { $0.authUID == uid })
+            }
             vm.startListeningComments(postId: post.id ?? "")
             if let id = post.id { await vm.refreshLikedPosts(for: [id]) }
         }
     }
 }
 
-// MARK: - Comment Row (absolute date+time)
+// MARK: - Comment Row (with avatar + absolute date/time)
 private struct CommentRow: View {
     let postId: String
     let comment: ForumComment
@@ -118,10 +130,16 @@ private struct CommentRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(comment.authorName)
-                    .font(.subheadline).bold()
+                Label {
+                    Text(comment.authorName)
+                        .font(.subheadline).bold()
+                } icon: {
+                    Image(systemName: comment.authorAvatar.isEmpty ? "person.circle.fill" : comment.authorAvatar)
+                        .resizable()
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
-                // Absolute date & time
                 Text(comment.createdAt, format: .dateTime.day().month().year().hour().minute())
                     .font(.caption)
                     .foregroundStyle(.tertiary)

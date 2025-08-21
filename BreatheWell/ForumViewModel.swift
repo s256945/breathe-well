@@ -2,9 +2,13 @@ import Foundation
 import Combine
 import FirebaseAuth
 import FirebaseFirestore
+import SwiftData
 
 @MainActor
 final class ForumViewModel: ObservableObject {
+
+    // Provide/overwrite this from the views when you know the user
+    @Published var userProfile: UserProfile?
 
     // MARK: - Published UI state
     @Published var posts: [ForumPost] = []
@@ -18,7 +22,6 @@ final class ForumViewModel: ObservableObject {
     @Published var newPostTitle: String = ""
     @Published var newPostBody: String = ""
     @Published var newCommentBody: String = ""
-
     @Published var errorMessage: String?
 
     // MARK: - Firestore
@@ -26,10 +29,19 @@ final class ForumViewModel: ObservableObject {
     private var postsListener: ListenerRegistration?
     private var commentsListener: ListenerRegistration?
 
+    // MARK: - Auth helpers
     private var uid: String? { Auth.auth().currentUser?.uid }
-    private var displayName: String {
+
+    private var effectiveDisplayName: String {
+        if let p = userProfile, !p.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return p.displayName
+        }
         let u = Auth.auth().currentUser
         return u?.displayName ?? u?.email ?? "Anonymous"
+    }
+
+    private var effectiveAvatarSymbol: String {
+        userProfile?.avatarSystemName ?? "person.circle.fill"
     }
 
     deinit {
@@ -38,7 +50,6 @@ final class ForumViewModel: ObservableObject {
     }
 
     // MARK: - Live streams
-
     func startListeningPosts() {
         postsListener?.remove()
 
@@ -81,19 +92,21 @@ final class ForumViewModel: ObservableObject {
     }
 
     // MARK: - Create
-
     func createPost() async {
         guard uid != nil else {
             errorMessage = "You must be signed in."
             return
         }
+
         let data: [String: Any] = [
             "title": newPostTitle.trimmingCharacters(in: .whitespacesAndNewlines),
             "body": newPostBody.trimmingCharacters(in: .whitespacesAndNewlines),
-            "authorName": displayName,
+            "authorName": effectiveDisplayName,
+            "authorAvatar": effectiveAvatarSymbol,
             "createdAt": FieldValue.serverTimestamp(),
             "likeCount": 0
         ]
+
         do {
             _ = try await db.collection("posts").addDocument(data: data)
             newPostTitle = ""; newPostBody = ""
@@ -102,33 +115,33 @@ final class ForumViewModel: ObservableObject {
         }
     }
 
-    func addComment(to postId: String) async {
+    func addComment(to postId: String, body: String) async {
         guard uid != nil else {
             errorMessage = "You must be signed in."
             return
         }
-        let text = newCommentBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
         let data: [String: Any] = [
             "body": text,
-            "authorName": displayName,
+            "authorName": effectiveDisplayName,
+            "authorAvatar": effectiveAvatarSymbol,
             "createdAt": FieldValue.serverTimestamp(),
             "likeCount": 0
         ]
+
         do {
             _ = try await db.collection("posts")
                 .document(postId)
                 .collection("comments")
                 .addDocument(data: data)
-            newCommentBody = ""
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     // MARK: - Likes (posts)
-
     func refreshLikedPosts(for postIds: [String]) async {
         guard let uid = uid, !postIds.isEmpty else { return }
         do {
@@ -183,7 +196,7 @@ final class ForumViewModel: ObservableObject {
                 return nil
             }
 
-            // Optimistic UI update
+            // Optimistic UI
             if likedPosts.contains(postId) {
                 likedPosts.remove(postId)
                 if let idx = posts.firstIndex(where: { $0.id == postId }) {
@@ -201,7 +214,6 @@ final class ForumViewModel: ObservableObject {
     }
 
     // MARK: - Likes (comments)
-
     func refreshLikedComments(postId: String, commentIds: [String]) async {
         guard let uid = uid, !commentIds.isEmpty else { return }
         do {
@@ -258,7 +270,7 @@ final class ForumViewModel: ObservableObject {
                 return nil
             }
 
-            // Optimistic UI update
+            // Optimistic UI
             let key = "\(postId)#\(commentId)"
             if likedComments.contains(key) {
                 likedComments.remove(key)
@@ -276,8 +288,7 @@ final class ForumViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mapping helpers (no FirebaseFirestoreSwift)
-
+    // MARK: - Mapping helpers
     private static func post(from doc: DocumentSnapshot) -> ForumPost? {
         guard let data = doc.data() else { return nil }
         let ts = data["createdAt"] as? Timestamp
@@ -286,6 +297,7 @@ final class ForumViewModel: ObservableObject {
             title: data["title"] as? String ?? "",
             body: data["body"] as? String ?? "",
             authorName: data["authorName"] as? String ?? "Anonymous",
+            authorAvatar: data["authorAvatar"] as? String ?? "person.circle.fill",
             createdAt: ts?.dateValue() ?? Date(),
             likeCount: data["likeCount"] as? Int ?? 0
         )
@@ -298,6 +310,7 @@ final class ForumViewModel: ObservableObject {
             id: doc.documentID,
             body: data["body"] as? String ?? "",
             authorName: data["authorName"] as? String ?? "Anonymous",
+            authorAvatar: data["authorAvatar"] as? String ?? "person.circle.fill",
             createdAt: ts?.dateValue() ?? Date(),
             likeCount: data["likeCount"] as? Int ?? 0
         )

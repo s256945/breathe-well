@@ -1,6 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct ForumListView: View {
+    @EnvironmentObject var auth: AuthViewModel
+    @Environment(\.modelContext) private var context
+
     @StateObject private var vm = ForumViewModel()
     @State private var showingComposer = false
 
@@ -31,20 +35,26 @@ struct ForumListView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showingComposer = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
+                    } label: { Image(systemName: "square.and.pencil") }
                     .accessibilityLabel("New post")
                 }
             }
             .navigationDestination(for: ForumPost.self) { p in
                 ForumPostView(post: p)
+                    .environmentObject(auth) // pass through for profile lookup
             }
             .sheet(isPresented: $showingComposer) {
                 NewPostSheet(vm: vm)
                     .presentationDetents([.medium, .large])
             }
-            .task { vm.startListeningPosts() }
+            .task {
+                // Load the user's SwiftData profile and hand to the VM
+                if let uid = auth.user?.uid {
+                    let all: [UserProfile] = (try? context.fetch(FetchDescriptor<UserProfile>())) ?? []
+                    vm.userProfile = all.first(where: { $0.authUID == uid })
+                }
+                vm.startListeningPosts()
+            }
             .overlay(alignment: .bottom) {
                 if let err = vm.errorMessage {
                     Text(err)
@@ -59,7 +69,7 @@ struct ForumListView: View {
     }
 }
 
-// MARK: - Row (absolute date+time)
+// MARK: - Row
 private struct PostRow: View {
     let post: ForumPost
     let liked: Bool
@@ -80,7 +90,6 @@ private struct PostRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                // Absolute date & time
                 Text(post.createdAt, format: .dateTime.day().month().year().hour().minute())
                     .font(.caption)
                     .foregroundStyle(.tertiary)
