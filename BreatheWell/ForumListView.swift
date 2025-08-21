@@ -2,10 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct ForumListView: View {
-    @EnvironmentObject var auth: AuthViewModel
-    @Environment(\.modelContext) private var context
-
     @StateObject private var vm = ForumViewModel()
+    @Environment(\.modelContext) private var context
     @State private var showingComposer = false
 
     var body: some View {
@@ -17,15 +15,17 @@ struct ForumListView: View {
                             PostRow(
                                 post: post,
                                 liked: post.id.map { vm.likedPosts.contains($0) } ?? false,
-                                onToggleLike: {
-                                    if let id = post.id {
-                                        Task { await vm.togglePostLike(postId: id) }
-                                    }
-                                }
+                                onToggleLike: { if let id = post.id { Task { await vm.togglePostLike(postId: id) } } }
                             )
                         }
-                        .task {
-                            if let id = post.id { await vm.refreshLikedPosts(for: [id]) }
+                        .task { if let id = post.id { await vm.refreshLikedPosts(for: [id]) } }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            // Only show delete on your own post
+                            if vm.currentUID == post.authorId, let id = post.id {
+                                Button(role: .destructive) {
+                                    Task { await vm.deletePost(id) }
+                                } label: { Label("Delete", systemImage: "trash") }
+                            }
                         }
                     }
                 }
@@ -33,28 +33,20 @@ struct ForumListView: View {
             .navigationTitle("Community")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingComposer = true
-                    } label: { Image(systemName: "square.and.pencil") }
+                    Button { showingComposer = true } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
                     .accessibilityLabel("New post")
                 }
             }
             .navigationDestination(for: ForumPost.self) { p in
                 ForumPostView(post: p)
-                    .environmentObject(auth) // pass through for profile lookup
             }
             .sheet(isPresented: $showingComposer) {
-                NewPostSheet(vm: vm)
+                NewPostSheet(vm: vm, context: context)
                     .presentationDetents([.medium, .large])
             }
-            .task {
-                // Load the user's SwiftData profile and hand to the VM
-                if let uid = auth.user?.uid {
-                    let all: [UserProfile] = (try? context.fetch(FetchDescriptor<UserProfile>())) ?? []
-                    vm.userProfile = all.first(where: { $0.authUID == uid })
-                }
-                vm.startListeningPosts()
-            }
+            .task { vm.startListeningPosts() }
             .overlay(alignment: .bottom) {
                 if let err = vm.errorMessage {
                     Text(err)
@@ -69,7 +61,6 @@ struct ForumListView: View {
     }
 }
 
-// MARK: - Row
 private struct PostRow: View {
     let post: ForumPost
     let liked: Bool
@@ -77,25 +68,14 @@ private struct PostRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(post.title)
-                .font(.headline)
-
-            Text(post.body)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+            Text(post.title).font(.headline)
+            Text(post.body).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
 
             HStack(spacing: 12) {
-                Text(post.authorName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
+                Text(post.authorName).font(.caption).foregroundStyle(.secondary)
                 Text(post.createdAt, format: .dateTime.day().month().year().hour().minute())
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-
+                    .font(.caption).foregroundStyle(.tertiary)
                 Spacer()
-
                 Button(action: onToggleLike) {
                     Label("\(post.likeCount)", systemImage: liked ? "heart.fill" : "heart")
                 }
@@ -107,33 +87,23 @@ private struct PostRow: View {
     }
 }
 
-// MARK: - New Post
 private struct NewPostSheet: View {
     @ObservedObject var vm: ForumViewModel
+    let context: ModelContext
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Title") {
-                    TextField("What's on your mind?", text: $vm.newPostTitle)
-                }
-                Section("Message") {
-                    TextEditor(text: $vm.newPostBody)
-                        .frame(minHeight: 120)
-                }
+                Section("Title") { TextField("What's on your mind?", text: $vm.newPostTitle) }
+                Section("Message") { TextEditor(text: $vm.newPostBody).frame(minHeight: 120) }
             }
             .navigationTitle("New post")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Post") {
-                        Task {
-                            await vm.createPost()
-                            dismiss()
-                        }
+                        Task { await vm.createPost(context: context); dismiss() }
                     }
                     .disabled(vm.newPostTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                               vm.newPostBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

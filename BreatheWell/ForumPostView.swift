@@ -1,15 +1,40 @@
 import SwiftUI
 import SwiftData
-import FirebaseAuth
 
 struct ForumPostView: View {
     let post: ForumPost
-
-    @EnvironmentObject var auth: AuthViewModel
-    @Environment(\.modelContext) private var context
     @StateObject private var vm = ForumViewModel()
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
 
     @State private var replyText = ""
+
+    // Delete confirmation state
+    @State private var showPostDeleteDialog = false
+    @State private var pendingCommentToDelete: ForumComment? = nil
+    @State private var showCommentDeleteDialog = false
+
+    // Fetch current profile display name once for legacy fallback
+    private var myDisplayName: String {
+        if let uid = vm.currentUID,
+           let all: [UserProfile] = try? context.fetch(FetchDescriptor<UserProfile>()),
+           let me = all.first(where: { $0.authUID == uid }),
+           !me.displayName.isEmpty {
+            return me.displayName
+        }
+        return "Anonymous"
+    }
+
+    // Legacy-aware ownership check for comments
+    private func isOwner(of comment: ForumComment) -> Bool {
+        if let uid = vm.currentUID {
+            if comment.authorId == uid { return true }                // preferred path
+            if comment.authorId.isEmpty && comment.authorName == myDisplayName {
+                return true                                           // legacy fallback
+            }
+        }
+        return false
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,7 +74,6 @@ struct ForumPostView: View {
                                 Label("\(post.likeCount)", systemImage: liked ? "heart.fill" : "heart")
                             }
                             .buttonStyle(.bordered)
-                            .accessibilityLabel((post.id != nil && vm.likedPosts.contains(post.id!)) ? "Unlike post" : "Like post")
                         }
                     }
                     .padding(12)
@@ -66,10 +90,16 @@ struct ForumPostView: View {
                                 postId: post.id ?? "",
                                 comment: c,
                                 liked: vm.likedComments.contains("\(post.id ?? "")#\(c.id ?? "")"),
+                                isOwner: isOwner(of: c),
                                 onToggleLike: {
                                     if let pid = post.id, let cid = c.id {
                                         Task { await vm.toggleCommentLike(postId: pid, commentId: cid) }
                                     }
+                                },
+                                onRequestDelete: {
+                                    // open confirm modal for this comment
+                                    pendingCommentToDelete = c
+                                    showCommentDeleteDialog = true
                                 }
                             )
                             .task {
@@ -92,7 +122,7 @@ struct ForumPostView: View {
                 Button {
                     Task {
                         if let id = post.id {
-                            await vm.addComment(to: id, body: replyText)
+                            await vm.addComment(to: id, body: replyText, context: context)
                             replyText = ""
                         }
                     }
@@ -108,24 +138,68 @@ struct ForumPostView: View {
         }
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            // Load SwiftData profile once here too (detail may be opened directly)
-            if let uid = auth.user?.uid {
-                let all: [UserProfile] = (try? context.fetch(FetchDescriptor<UserProfile>())) ?? []
-                vm.userProfile = all.first(where: { $0.authUID == uid })
+        .toolbar {
+            // Delete post button only for owner
+            if vm.currentUID == post.authorId, let _ = post.id {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        showPostDeleteDialog = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel("Delete post")
+                }
             }
+        }
+        // Post delete confirmation
+        .confirmationDialog("Delete post?",
+                            isPresented: $showPostDeleteDialog,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    if let id = post.id {
+                        await vm.deletePost(id)
+                        dismiss()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This action will permanently delete the post and all of its comments.")
+        }
+        // Comment delete confirmation
+        .confirmationDialog("Delete comment?",
+                            isPresented: $showCommentDeleteDialog,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    if let pid = post.id, let cid = pendingCommentToDelete?.id {
+                        await vm.deleteComment(postId: pid, commentId: cid)
+                    }
+                    pendingCommentToDelete = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingCommentToDelete = nil
+            }
+        } message: {
+            Text("This action will permanently delete your comment.")
+        }
+        .task {
             vm.startListeningComments(postId: post.id ?? "")
             if let id = post.id { await vm.refreshLikedPosts(for: [id]) }
         }
     }
 }
 
-// MARK: - Comment Row (with avatar + absolute date/time)
+// MARK: - Comment Row
 private struct CommentRow: View {
     let postId: String
     let comment: ForumComment
     let liked: Bool
+    let isOwner: Bool
     var onToggleLike: () -> Void
+    var onRequestDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -149,15 +223,27 @@ private struct CommentRow: View {
 
             HStack {
                 Spacer()
+                if isOwner {
+                    Button(role: .destructive, action: onRequestDelete) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .buttonStyle(.bordered)
+                }
                 Button(action: onToggleLike) {
                     Label("\(comment.likeCount)", systemImage: liked ? "heart.fill" : "heart")
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel(liked ? "Unlike comment" : "Like comment")
             }
         }
         .padding(12)
         .background(Color(.systemGray6))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .swipeActions(edge: .trailing) {
+            if isOwner {
+                Button(role: .destructive, action: onRequestDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
 }
