@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import Charts
 
-/// Choose which metric to draw
+// MARK: - Metric picker
 private enum SymptomMetric: String, CaseIterable, Identifiable {
     case breathlessness, energy, mood, sleep, loneliness
     var id: String { rawValue }
@@ -37,6 +37,7 @@ private enum SymptomMetric: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Range picker
 private enum RangePick: String, CaseIterable, Identifiable {
     case last7 = "Last 7 days"
     case last30 = "Last 30 days"
@@ -52,6 +53,13 @@ private enum RangePick: String, CaseIterable, Identifiable {
     }
 }
 
+// Simple point model for Charts
+private struct DataPoint: Identifiable {
+    let id = UUID()
+    let date: Date
+    let value: Double
+}
+
 struct SymptomsOverviewView: View {
     @Environment(\.modelContext) private var context
 
@@ -63,27 +71,46 @@ struct SymptomsOverviewView: View {
     @State private var showShare = false
     @State private var csvURL: URL?
 
+    // MARK: - Derived data
+
+    private var todayStart: Date { Calendar.current.startOfDay(for: Date()) }
+
     private var dateCutoff: Date {
-        Calendar.current.date(byAdding: .day, value: -range.days + 1, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        Calendar.current.date(byAdding: .day, value: -(range.days - 1), to: todayStart) ?? todayStart
     }
 
-    private var entries: [SymptomEntry] {
-        allEntries.filter { $0.date >= dateCutoff }.sorted(by: { $0.date < $1.date })
+    private var filteredEntries: [SymptomEntry] {
+        let filtered = allEntries.filter { $0.date >= dateCutoff }
+        return filtered.sorted { $0.date < $1.date }
     }
 
-    private var averaged: [(date: Date, value: Double)] {
-        let raw = entries.compactMap { e -> (Date, Double)? in
-            guard let v = metric.value(from: e) else { return nil }
-            return (e.date, v)
+    private var points: [DataPoint] {
+        var out: [DataPoint] = []
+        out.reserveCapacity(filteredEntries.count)
+        for e in filteredEntries {
+            if let v = metric.value(from: e) {
+                out.append(.init(date: e.date, value: v))
+            }
         }
-        guard !raw.isEmpty else { return [] }
-        let window = 3
-        return raw.enumerated().map { i, pair in
-            let lower = max(0, i - (window - 1))
-            let slice = raw[lower...i].map { $0.1 }
-            let avg = slice.reduce(0, +) / Double(slice.count)
-            return (pair.0, avg)
-        }
+        return out
+    }
+
+    // Domain: first day start ... last day end (+60s nudge so last label appears)
+    private var xDomain: ClosedRange<Date>? {
+        guard let first = filteredEntries.first?.date,
+              let last  = filteredEntries.last?.date else { return nil }
+        let cal = Calendar.current
+        let lower = cal.startOfDay(for: first)
+        let endOfLast = cal.date(bySettingHour: 23, minute: 59, second: 59, of: last) ?? last
+        return lower...(endOfLast.addingTimeInterval(60))
+    }
+
+    // One tick per unique entry day
+    private var xTicks: [Date] {
+        let cal = Calendar.current
+        var set = Set<Date>()
+        for e in filteredEntries { set.insert(cal.startOfDay(for: e.date)) }
+        return Array(set).sorted()
     }
 
     var body: some View {
@@ -92,106 +119,9 @@ struct SymptomsOverviewView: View {
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
                 VStack(spacing: 16) {
-                    VStack(spacing: 6) {
-                        Text("BreatheWell")
-                            .font(.title2.weight(.semibold))
-                            .foregroundStyle(.blue)
-                        Text(Date.now.formatted(date: .complete, time: .omitted))
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 8)
-
-                    HStack(spacing: 12) {
-                        Menu {
-                            Picker("Range", selection: $range) {
-                                ForEach(RangePick.allCases) { r in Text(r.rawValue).tag(r) }
-                            }
-                        } label: {
-                            Label(range.rawValue, systemImage: "calendar")
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(.thinMaterial, in: Capsule())
-                        }
-
-                        Menu {
-                            Picker("Metric", selection: $metric) {
-                                ForEach(SymptomMetric.allCases) { m in Text(m.title).tag(m) }
-                            }
-                        } label: {
-                            Label(metric.title, systemImage: "chart.xyaxis.line")
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(.thinMaterial, in: Capsule())
-                        }
-
-                        Spacer()
-
-                        Button {
-                            if let url = exportCSV() {
-                                csvURL = url
-                                showShare = true
-                            }
-                        } label: {
-                            Label("Export", systemImage: "square.and.arrow.up")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(entries.isEmpty)
-                    }
-                    .padding(.horizontal)
-
-                    Group {
-                        if entries.isEmpty {
-                            VStack(spacing: 10) {
-                                Text("No entries yet")
-                                    .font(.headline)
-                                    .foregroundStyle(.secondary)
-                                Text("Add daily symptoms to see your trends here.")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 280)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                            .padding(.horizontal)
-                        } else {
-                            Chart {
-                                ForEach(entries, id: \.id) { e in
-                                    if let v = metric.value(from: e) {
-                                        LineMark(
-                                            x: .value("Date", e.date),
-                                            y: .value(metric.title, v)
-                                        )
-                                        .interpolationMethod(.monotone)
-                                        PointMark(
-                                            x: .value("Date", e.date),
-                                            y: .value(metric.title, v)
-                                        )
-                                        .symbolSize(20)
-                                    }
-                                }
-                                if averaged.count > 1 {
-                                    ForEach(averaged, id: \.date) { p in
-                                        LineMark(
-                                            x: .value("Date", p.date),
-                                            y: .value("Avg", p.value)
-                                        )
-                                        .foregroundStyle(.blue)
-                                        .lineStyle(.init(lineWidth: 3))
-                                        .interpolationMethod(.monotone)
-                                    }
-                                }
-                            }
-                            .chartYScale(domain: metric.yDomain)
-                            .chartXAxis {
-                                AxisMarks(values: .automatic(desiredCount: 6)) { _ in
-                                    AxisGridLine()
-                                    AxisTick()
-                                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                                }
-                            }
-                            .frame(minHeight: 280)
-                            .padding(.horizontal)
-                        }
-                    }
-
+                    header
+                    controls
+                    chartArea
                     Spacer(minLength: 12)
 
                     NavigationLink {
@@ -209,20 +139,127 @@ struct SymptomsOverviewView: View {
             .navigationBarHidden(true)
         }
         .sheet(isPresented: $showShare) {
-            if let csvURL {
-                ShareSheet(items: [csvURL])
+            if let csvURL { ShareSheet(items: [csvURL]) }
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var header: some View {
+        VStack(spacing: 6) {
+            Text("BreatheWell")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.blue)
+            Text(Date.now.formatted(date: .complete, time: .omitted))
+                .font(.headline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 8)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 12) {
+            Menu {
+                Picker("Range", selection: $range) {
+                    ForEach(RangePick.allCases) { r in Text(r.rawValue).tag(r) }
+                }
+            } label: {
+                Label(range.rawValue, systemImage: "calendar")
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(.thinMaterial, in: Capsule())
+            }
+
+            Menu {
+                Picker("Metric", selection: $metric) {
+                    ForEach(SymptomMetric.allCases) { m in Text(m.title).tag(m) }
+                }
+            } label: {
+                Label(metric.title, systemImage: "chart.xyaxis.line")
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(.thinMaterial, in: Capsule())
+            }
+
+            Spacer()
+
+            Button {
+                if let url = exportCSV() {
+                    csvURL = url
+                    showShare = true
+                }
+            } label: {
+                Label("Export", systemImage: "square.and.arrow.up")
+            }
+            .buttonStyle(.bordered)
+            .disabled(points.isEmpty)
+        }
+        .padding(.horizontal)
+    }
+
+    private var chartArea: some View {
+        Group {
+            if points.isEmpty {
+                VStack(spacing: 10) {
+                    Text("No entries yet").font(.headline).foregroundStyle(.secondary)
+                    Text("Add daily symptoms to see your trends here.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 280)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal)
+            } else {
+                buildChart()
+                    .frame(minHeight: 280)
+                    .padding(.horizontal)
             }
         }
     }
 
+    // Build the chart step-by-step to avoid type-inference issues
+    private func buildChart() -> AnyView {
+        var view: AnyView = AnyView(
+            Chart {
+                ForEach(points) { p in
+                    LineMark(x: .value("Date", p.date),
+                             y: .value(metric.title, p.value))
+                    PointMark(x: .value("Date", p.date),
+                              y: .value(metric.title, p.value))
+                }
+            }
+        )
+
+        view = AnyView(view.chartYScale(domain: metric.yDomain))
+        view = AnyView(view.chartYAxis { AxisMarks(position: .leading) })
+
+        // X ticks only where we have data
+        let ticks = xTicks
+        view = AnyView(
+            view.chartXAxis {
+                AxisMarks(values: ticks) { _ in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                }
+            }
+        )
+
+        if let domain = xDomain {
+            view = AnyView(view.chartXScale(domain: domain))
+        }
+
+        return view
+    }
+    
+    // MARK: - CSV export
+
     @discardableResult
     private func exportCSV() -> URL? {
-        guard !entries.isEmpty else { return nil }
+        guard !filteredEntries.isEmpty else { return nil }
         var csv = "Date,Breathlessness,Energy,Mood,Sleep,Loneliness,Community,Outside,Note\n"
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
 
-        for e in entries {
+        for e in filteredEntries {
             let d = df.string(from: e.date)
             let b = e.breathlessness
             let en = e.energyLevel
@@ -247,6 +284,7 @@ struct SymptomsOverviewView: View {
     }
 }
 
+// Share sheet wrapper
 private struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
     func makeUIViewController(context: Context) -> UIActivityViewController {
