@@ -60,6 +60,12 @@ private struct DataPoint: Identifiable {
     let value: Double
 }
 
+// Identifiable wrapper for share sheet
+private struct ExportFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 struct SymptomsOverviewView: View {
     @Environment(\.modelContext) private var context
 
@@ -68,9 +74,8 @@ struct SymptomsOverviewView: View {
 
     @State private var range: RangePick = .last7
     @State private var metric: SymptomMetric = .breathlessness
-    @State private var showShare = false
-    @State private var csvURL: URL?
-
+    @State private var csvFile: ExportFile?          // <- use sheet(item:)
+    
     // MARK: - Derived data
 
     private var todayStart: Date { Calendar.current.startOfDay(for: Date()) }
@@ -138,8 +143,9 @@ struct SymptomsOverviewView: View {
             }
             .navigationBarHidden(true)
         }
-        .sheet(isPresented: $showShare) {
-            if let csvURL { ShareSheet(items: [csvURL]) }
+        // Present only when we have a real file URL
+        .sheet(item: $csvFile) { file in
+            ShareSheet(items: [file.url])
         }
     }
 
@@ -183,8 +189,7 @@ struct SymptomsOverviewView: View {
 
             Button {
                 if let url = exportCSV() {
-                    csvURL = url
-                    showShare = true
+                    csvFile = ExportFile(url: url)   // <- trigger sheet
                 }
             } label: {
                 Label("Export", systemImage: "square.and.arrow.up")

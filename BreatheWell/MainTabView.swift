@@ -11,6 +11,8 @@ struct MainTabView: View {
 
             ForumListView()
                 .tabItem { Label("Community", systemImage: "person.3.fill") }
+            
+            BreatheBuddyView().tabItem { Label("Buddy", systemImage: "bubble.left.and.bubble.right") }
 
             MedicationView()       // medication page (big % circle)
                 .tabItem { Label("Medication", systemImage: "pills") }
